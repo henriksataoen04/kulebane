@@ -45,13 +45,21 @@ export function TrajektoriGraf({ rader, nullpunkt }: Props) {
 
   const minDrop = Math.min(...rader.map((r) => r.drop))
   const maxDrop = Math.max(...rader.map((r) => r.drop))
-  // Give more vertical space to the drop (bottom) side
-  const yDomain = [Math.min(minDrop * 1.15, -50), Math.max(maxDrop * 1.5, 60)]
+
+  // Round domain to clean multiples to avoid recharts floating-point tick artifacts
+  const range = Math.abs(minDrop) + Math.max(maxDrop, 50)
+  const tickStep = range > 4000 ? 1000 : range > 2000 ? 500 : range > 800 ? 200 : 100
+  const yMin = Math.floor(minDrop * 1.15 / tickStep) * tickStep
+  const yMax = Math.ceil(Math.max(maxDrop, 50) / tickStep) * tickStep
+
+  // Explicit ticks — no recharts auto-compute
+  const ticks: number[] = []
+  for (let v = yMax; v >= yMin; v -= tickStep) ticks.push(v)
 
   return (
     <div className="w-full h-52">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 40 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 56 }}>
           <defs>
             <linearGradient id="dropGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#4a8a5e" stopOpacity={0.3} />
@@ -67,12 +75,13 @@ export function TrajektoriGraf({ rader, nullpunkt }: Props) {
             tickFormatter={(v) => `${v}m`}
           />
           <YAxis
-            domain={yDomain}
+            domain={[yMin, yMax]}
+            ticks={ticks}
             tick={{ fontSize: 10, fill: "rgba(255,255,255,0.4)" }}
             tickLine={false}
             axisLine={{ stroke: "rgba(255,255,255,0.1)" }}
-            tickFormatter={(v) => `${v}mm`}
-            width={40}
+            tickFormatter={(v) => `${Math.round(v)}mm`}
+            width={56}
           />
           <Tooltip content={<CustomTooltip />} />
           <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeDasharray="4 4" />
