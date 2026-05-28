@@ -40,11 +40,13 @@ export function TrajektoriGraf({ rader, nullpunkt }: Props) {
   const data = rader.map((r) => ({
     ...r,
     distanse: r.distanse,
-    dropMm: -r.drop, // flip: positiv = over, negativ = under
+    dropMm: r.drop, // negativ = under siktepunkt, positiv = over
   }))
 
-  const maxDrop = Math.max(...rader.map((r) => Math.abs(r.drop)))
-  const yDomain = [-maxDrop * 1.2, maxDrop * 1.2]
+  const minDrop = Math.min(...rader.map((r) => r.drop))
+  const maxDrop = Math.max(...rader.map((r) => r.drop))
+  // Give more vertical space to the drop (bottom) side
+  const yDomain = [Math.min(minDrop * 1.15, -50), Math.max(maxDrop * 1.5, 60)]
 
   return (
     <div className="w-full h-52">

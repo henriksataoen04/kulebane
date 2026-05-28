@@ -58,15 +58,15 @@ export function BallistikkTabell({ rader, nullpunkt, visVind }: Props) {
                   </td>
                   <td className={cn(
                     "px-3 py-2 text-right tabular-nums font-medium",
-                    rad.drop > 50 ? "text-red-400" : rad.drop > 0 ? "text-orange-400" : "text-foreground"
+                    rad.drop < -300 ? "text-red-400" : rad.drop < -100 ? "text-orange-400" : "text-foreground"
                   )}>
-                    {rad.drop > 0 ? "-" : "+"}{Math.abs(rad.drop)}
+                    {rad.drop > 0 ? `+${rad.drop}` : `${rad.drop}`}
                   </td>
                   <td className={cn(
                     "px-3 py-2 text-right tabular-nums",
-                    Math.abs(rad.dropMoa) > 5 ? "text-red-400/80" : "text-muted-foreground"
+                    rad.dropMoa > 5 ? "text-red-400/80" : "text-muted-foreground"
                   )}>
-                    {rad.dropMoa > 0 ? "-" : "+"}{Math.abs(rad.dropMoa)}
+                    {rad.dropMoa > 0 ? `+${rad.dropMoa}` : `${rad.dropMoa}`}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{rad.tid}</td>
                   {visVind && (
