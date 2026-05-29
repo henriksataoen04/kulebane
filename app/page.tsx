@@ -5,14 +5,47 @@ import { beregnBallistikk } from "@/lib/ballistics"
 import { TrajektoriGraf } from "@/components/kalkulator/TrajektoriGraf"
 import { BallistikkTabell } from "@/components/kalkulator/BallistikkTabell"
 import { BetingelserPanel } from "@/components/kalkulator/BetingelserPanel"
+import { DopeCard } from "@/components/kalkulator/DopeCard"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Crosshair, ChevronDown, Wind } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Crosshair, ChevronDown, Wind, FileText } from "lucide-react"
 import Link from "next/link"
+import { cn } from "@/lib/utils"
+
+const INTERVALL_VALG = [25, 50, 100]
+const MAX_DIST_VALG = [300, 500, 700, 1000]
+
+function PillVelger<T extends number>({
+  valg, aktiv, onVelg, suffix = "",
+}: { valg: T[]; aktiv: T; onVelg: (v: T) => void; suffix?: string }) {
+  return (
+    <div className="flex gap-1">
+      {valg.map((v) => (
+        <button
+          key={v}
+          onClick={() => onVelg(v)}
+          className={cn(
+            "px-2.5 py-1 rounded-md text-xs font-medium transition-colors border",
+            aktiv === v
+              ? "bg-primary/20 border-primary/50 text-primary"
+              : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground"
+          )}
+        >
+          {v}{suffix}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 export default function KalkulatorSide() {
   const { rifler, ammo, betingelser, aktivRifleId, aktivAmmoId, settAktivRifle, settAktivAmmo } = useKulebaneStore()
   const [visBetingelser, setVisBetingelser] = useState(false)
+  const [intervall, setIntervall] = useState<25 | 50 | 100>(50)
+  const [maxDist, setMaxDist] = useState<300 | 500 | 700 | 1000>(1000)
+  const [visDopeCard, setVisDopeCard] = useState(false)
 
   const aktivRifle = rifler.find((r) => r.id === aktivRifleId)
   const aktivAmmo = ammo.find((a) => a.id === aktivAmmoId)
@@ -20,11 +53,26 @@ export default function KalkulatorSide() {
   const resultat = useMemo(() => {
     if (!aktivRifle || !aktivAmmo) return null
     try {
-      return beregnBallistikk(aktivRifle, aktivAmmo, betingelser)
+      return beregnBallistikk(aktivRifle, aktivAmmo, betingelser, maxDist, intervall)
     } catch {
       return null
     }
-  }, [aktivRifle, aktivAmmo, betingelser])
+  }, [aktivRifle, aktivAmmo, betingelser, maxDist, intervall])
+
+  // Reference distance for summary cards: 3× nullpunkt, rounded to nearest interval
+  const refDist = aktivRifle
+    ? Math.min(
+        Math.round((aktivRifle.nullpunkt * 3) / intervall) * intervall,
+        maxDist
+      )
+    : 300
+  const refRad = resultat?.rader.find((r) => r.distanse === refDist)
+    ?? resultat?.rader[Math.floor((resultat.rader.length ?? 0) / 2)]
+
+  // Max effective range (energy ≥ 800 J)
+  const maxEffektiv = resultat
+    ? ([...resultat.rader].reverse().find((r) => r.energi >= 800)?.distanse ?? 0)
+    : 0
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-4">
@@ -35,9 +83,18 @@ export default function KalkulatorSide() {
           <h1 className="text-lg font-bold tracking-tight">Kulebane</h1>
         </div>
         {resultat && (
-          <Badge variant="secondary" className="text-xs">
-            PBR {resultat.maxPBR}m
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">PBR {resultat.maxPBR}m</Badge>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 text-xs px-2.5"
+              onClick={() => setVisDopeCard(true)}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Dope
+            </Button>
+          </div>
         )}
       </div>
 
@@ -92,21 +149,13 @@ export default function KalkulatorSide() {
         </div>
       </div>
 
-      {/* Info-chips for aktiv profil */}
+      {/* Info-chips */}
       {aktivRifle && aktivAmmo && (
         <div className="flex flex-wrap gap-1.5">
-          <Badge variant="outline" className="text-xs border-primary/40 text-primary/80">
-            {aktivRifle.kaliber}
-          </Badge>
-          <Badge variant="outline" className="text-xs border-border text-muted-foreground">
-            NP {aktivRifle.nullpunkt}m
-          </Badge>
-          <Badge variant="outline" className="text-xs border-border text-muted-foreground">
-            {aktivAmmo.vekt}g · BC {aktivAmmo.bc}
-          </Badge>
-          <Badge variant="outline" className="text-xs border-border text-muted-foreground">
-            {aktivRifle.munningshastighet} m/s
-          </Badge>
+          <Badge variant="outline" className="text-xs border-primary/40 text-primary/80">{aktivRifle.kaliber}</Badge>
+          <Badge variant="outline" className="text-xs border-border text-muted-foreground">NP {aktivRifle.nullpunkt}m</Badge>
+          <Badge variant="outline" className="text-xs border-border text-muted-foreground">{aktivAmmo.vekt}g · BC {aktivAmmo.bc}</Badge>
+          <Badge variant="outline" className="text-xs border-border text-muted-foreground">{aktivRifle.munningshastighet} m/s</Badge>
         </div>
       )}
 
@@ -122,6 +171,20 @@ export default function KalkulatorSide() {
 
       {visBetingelser && <BetingelserPanel />}
 
+      {/* Tabell-innstillinger */}
+      {resultat && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Intervall:</span>
+            <PillVelger valg={INTERVALL_VALG as (25 | 50 | 100)[]} aktiv={intervall} onVelg={setIntervall} suffix="m" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Maks:</span>
+            <PillVelger valg={MAX_DIST_VALG as (300 | 500 | 700 | 1000)[]} aktiv={maxDist} onVelg={setMaxDist} suffix="m" />
+          </div>
+        </div>
+      )}
+
       {/* Resultater */}
       {!aktivRifle || !aktivAmmo ? (
         <Card className="border-border/50 bg-card/50">
@@ -132,7 +195,7 @@ export default function KalkulatorSide() {
         </Card>
       ) : resultat ? (
         <div className="space-y-4">
-          {/* PBR og sammendrag */}
+          {/* Sammendrag */}
           <div className="grid grid-cols-3 gap-2">
             <Card className="border-border bg-card">
               <CardContent className="p-3 text-center">
@@ -143,25 +206,24 @@ export default function KalkulatorSide() {
             </Card>
             <Card className="border-border bg-card">
               <CardContent className="p-3 text-center">
-                <p className="text-[10px] text-muted-foreground mb-1">500m drop</p>
+                <p className="text-[10px] text-muted-foreground mb-1">{refDist}m drop</p>
                 <p className="text-xl font-bold text-foreground">
-                  {Math.abs(resultat.rader.find(r => r.distanse === 500)?.drop ?? 0)}
+                  {Math.abs(refRad?.drop ?? 0)}
                   <span className="text-xs font-normal ml-0.5">mm</span>
                 </p>
                 <p className="text-[10px] text-muted-foreground">
-                  {Math.abs(resultat.rader.find(r => r.distanse === 500)?.dropMoa ?? 0)} MOA
+                  {refRad?.dropMoa ?? 0} MOA ↑
                 </p>
               </CardContent>
             </Card>
             <Card className="border-border bg-card">
               <CardContent className="p-3 text-center">
-                <p className="text-[10px] text-muted-foreground mb-1">500m energi</p>
-                <p className="text-xl font-bold text-foreground">
-                  {resultat.rader.find(r => r.distanse === 500)?.energi ?? 0}
-                  <span className="text-xs font-normal ml-0.5">J</span>
+                <p className="text-[10px] text-muted-foreground mb-1">Maks (800J)</p>
+                <p className={cn("text-xl font-bold", maxEffektiv > 0 ? "text-foreground" : "text-muted-foreground")}>
+                  {maxEffektiv > 0 ? `${maxEffektiv}m` : "−"}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
-                  {resultat.rader.find(r => r.distanse === 500)?.hastighet ?? 0} m/s
+                  {refRad?.energi ?? 0}J ved {refDist}m
                 </p>
               </CardContent>
             </Card>
@@ -171,7 +233,7 @@ export default function KalkulatorSide() {
           <Card className="border-border bg-card">
             <CardContent className="p-4">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Kulebane (drop i mm)
+                Kulebane (mm fra siktepunkt)
               </p>
               <TrajektoriGraf rader={resultat.rader} nullpunkt={aktivRifle.nullpunkt} />
             </CardContent>
@@ -186,6 +248,7 @@ export default function KalkulatorSide() {
               <BallistikkTabell
                 rader={resultat.rader}
                 nullpunkt={aktivRifle.nullpunkt}
+                kipphøyde={aktivRifle.kipphøyde}
                 visVind={betingelser.vindhastighet > 0}
               />
             </CardContent>
@@ -198,6 +261,19 @@ export default function KalkulatorSide() {
           </CardContent>
         </Card>
       )}
+
+      {/* Dope Card Dialog */}
+      <Dialog open={visDopeCard} onOpenChange={setVisDopeCard}>
+        <DialogContent className="bg-card border-border max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              Dope Card
+            </DialogTitle>
+          </DialogHeader>
+          {resultat && <DopeCard resultat={resultat} />}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
