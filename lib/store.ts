@@ -86,6 +86,16 @@ export const useKulebaneStore = create<KulebaneStore>()(
     }),
     {
       name: "kulebane-lagring",
+      // Deep-merge betingelser so new fields always get their defaults
+      // even when hydrating from an older localStorage snapshot
+      merge: (persisted: unknown, current: KulebaneStore) => {
+        const p = persisted as Partial<KulebaneStore>
+        return {
+          ...current,
+          ...p,
+          betingelser: { ...current.betingelser, ...(p.betingelser ?? {}) },
+        }
+      },
     }
   )
 )

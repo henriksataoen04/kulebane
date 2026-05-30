@@ -127,8 +127,9 @@ export function beregnBallistikk(
 
   // ── Coriolis-koeffisienter ────────────────────────────────────────────────
   // φ = geografisk breddegrad, α = skyteretning (azimut fra nord)
-  const phi = (betingelser.breddegrad * Math.PI) / 180
-  const alpha = (betingelser.skyteretning * Math.PI) / 180
+  // Null-coalesce: gamle localStorage-data mangler disse feltene
+  const phi = ((betingelser.breddegrad ?? 63) * Math.PI) / 180
+  const alpha = ((betingelser.skyteretning ?? 0) * Math.PI) / 180
 
   // Horisontal Coriolis (defleksjon til høyre på nordlig halvkule):
   //   d²z/dt² ≈ 2·Ω·sin(φ)·vx
