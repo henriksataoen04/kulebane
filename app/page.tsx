@@ -74,6 +74,11 @@ export default function KalkulatorSide() {
     ? ([...resultat.rader].reverse().find((r) => r.energi >= 800)?.distanse ?? 0)
     : 0
 
+  // Show Coriolis column when max lateral drift exceeds 5 mm
+  const visKoriolis = resultat
+    ? resultat.rader.some((r) => Math.abs(r.koriolisAvdrift) >= 5)
+    : false
+
   return (
     <div className="px-4 pt-6 pb-4 space-y-4">
       {/* Header */}
@@ -250,6 +255,7 @@ export default function KalkulatorSide() {
                 nullpunkt={aktivRifle.nullpunkt}
                 kipphøyde={aktivRifle.kipphøyde}
                 visVind={betingelser.vindhastighet > 0}
+                visKoriolis={visKoriolis}
               />
             </CardContent>
           </Card>

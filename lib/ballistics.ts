@@ -24,14 +24,13 @@ const G1_DRAG_TABLE: [number, number][] = [
   [4.6, 0.0211], [4.8, 0.0200], [5.0, 0.0190],
 ]
 
-// Standard ISA sea-level air density (kg/m³)
-const RHO0 = 1.2250
+// Physical constants
+const RHO0 = 1.2250           // ISA sea-level air density (kg/m³)
+const OMEGA_EARTH = 7.2921e-5  // Earth's angular velocity (rad/s)
 
-// Convert G1 BC (lb/in², e.g. 0.430) to the physics parameter used in the drag formula.
-// The drag deceleration is: a = -(ρ/ρ₀) · Cd_G1(M) · v² / (2 · BC_SI)
-// which reorganises to:      a = -ρ · v · Cd_G1(M) / (2 · bcPhysics) · v_component
-// where bcPhysics = RHO0 · BC_SI = RHO0 · BC_G1 · 703.07
 function g1TilBcPhysics(bc_g1: number): number {
+  // Convert G1 BC (dimensionless, e.g. 0.430) → physics drag parameter
+  // drag decel = -(ρ/ρ₀)·Cd·v²/(2·BC_SI), reorganised as -ρ·v·Cd/(2·bcPhysics)·v_comp
   return bc_g1 * 703.07 * RHO0 // ≈ bc_g1 × 861.3
 }
 
@@ -49,35 +48,28 @@ function interpolerDragKoeff(mach: number): number {
 }
 
 function lufttetthet(tempC: number, trykkHpa: number): number {
-  const T = tempC + 273.15
-  const P = trykkHpa * 100 // Pa
-  return P / (287.058 * T)
+  return (trykkHpa * 100) / (287.058 * (tempC + 273.15))
 }
 
 function lydhastighet(tempC: number): number {
   return 331.3 * Math.sqrt(1 + tempC / 273.15)
 }
 
-function moaImmVedDistanse(distanseM: number): number {
+function moaMmVedDistanse(distanseM: number): number {
   if (distanseM <= 0) return 0
-  return distanseM * Math.tan((Math.PI / 180) / 60) * 1000 // mm
+  return distanseM * Math.tan((Math.PI / 180) / 60) * 1000
 }
 
-// RK4 step for (x, y, vx, vy).
-// bcPhysics = RHO0 · BC_SI (kg·m⁻² · kg·m⁻³ = kg²·m⁻⁵ — just an opaque constant here).
+// RK4 for (x, y, vx, vy) — 2-D vertical plane only.
 function rk4Steg(
   x: number, y: number, vx: number, vy: number,
   dt: number,
-  rho: number, bcPhysics: number, lydHastighet: number,
-  g: number,
+  rho: number, bcPhysics: number, lyd: number, g: number,
 ): { x: number; y: number; vx: number; vy: number } {
   function deriv(vx_: number, vy_: number) {
     const v = Math.sqrt(vx_ * vx_ + vy_ * vy_)
     if (v < 1e-6) return { ax: 0, ay: -g }
-    const mach = v / lydHastighet
-    const Cd = interpolerDragKoeff(mach)
-    // a = -ρ · Cd · v / (2 · bcPhysics) · velocity_component
-    // = -(ρ/ρ₀) · Cd · v² / (2 · BC_SI) · (v_comp / v)  [correct G1 formula]
+    const Cd = interpolerDragKoeff(v / lyd)
     const dragK = (rho * v * Cd) / (2 * bcPhysics)
     return { ax: -dragK * vx_, ay: -g - dragK * vy_ }
   }
@@ -93,31 +85,24 @@ function rk4Steg(
   }
 }
 
-// Find the bore elevation angle (radians) that zeroes the rifle at nullpunktM.
 function finnNullpunktsVinkel(
-  munningshastighet: number, nullpunktM: number, kipphøydeM: number,
+  mv: number, nullpunktM: number, kipphøydeM: number,
   rho: number, bcPhysics: number, lyd: number, g: number,
 ): number {
-  function yVedNullpunkt(vinkel: number): number {
+  function yVed(vinkel: number): number {
     let x = 0, y = -kipphøydeM
-    let vx = munningshastighet * Math.cos(vinkel)
-    let vy = munningshastighet * Math.sin(vinkel)
-    const dt = 0.002
-    let t = 0
+    let vx = mv * Math.cos(vinkel), vy = mv * Math.sin(vinkel)
+    const dt = 0.002; let t = 0
     while (x < nullpunktM && t < 10) {
-      const res = rk4Steg(x, y, vx, vy, dt, rho, bcPhysics, lyd, g)
-      x = res.x; y = res.y; vx = res.vx; vy = res.vy
-      t += dt
+      const r = rk4Steg(x, y, vx, vy, dt, rho, bcPhysics, lyd, g)
+      x = r.x; y = r.y; vx = r.vx; vy = r.vy; t += dt
     }
     return y
   }
-
-  // Bisection
   let lo = -0.05, hi = 0.05
   for (let i = 0; i < 60; i++) {
     const mid = (lo + hi) / 2
-    if (yVedNullpunkt(mid) > 0) hi = mid
-    else lo = mid
+    yVed(mid) > 0 ? (hi = mid) : (lo = mid)
   }
   return (lo + hi) / 2
 }
@@ -133,50 +118,75 @@ export function beregnBallistikk(
   const rho = lufttetthet(betingelser.temperatur, betingelser.lufttrykk)
   const lyd = lydhastighet(betingelser.temperatur)
   const bcPhysics = g1TilBcPhysics(ammo.bc)
-  const masseKg = ammo.vekt / 1000 // gram → kg
-  const kipphøydeM = rifle.kipphøyde / 1000 // mm → m
+  const masseKg = ammo.vekt / 1000
+  const kipphøydeM = rifle.kipphøyde / 1000
 
-  // Crosswind component (perpendicular to firing direction)
+  // ── Vind (Pejsa lag rule) ─────────────────────────────────────────────────
   const vindRad = (betingelser.vindretning * Math.PI) / 180
-  const sidevind = betingelser.vindhastighet * Math.sin(vindRad) // m/s, + = høyre
+  const sidevind = betingelser.vindhastighet * Math.sin(vindRad) // m/s, positiv = høyre
+
+  // ── Coriolis-koeffisienter ────────────────────────────────────────────────
+  // φ = geografisk breddegrad, α = skyteretning (azimut fra nord)
+  const phi = (betingelser.breddegrad * Math.PI) / 180
+  const alpha = (betingelser.skyteretning * Math.PI) / 180
+
+  // Horisontal Coriolis (defleksjon til høyre på nordlig halvkule):
+  //   d²z/dt² ≈ 2·Ω·sin(φ)·vx
+  const korHz = 2 * OMEGA_EARTH * Math.sin(phi)
+
+  // Eötvös-ledd (vertikal Coriolis, avhenger av skyteretning):
+  //   d²y_cor/dt² ≈ 2·Ω·cos(φ)·sin(α)·vx
+  //   Positiv for østlig skyteretning → kulen treffer litt høyere
+  const korVert = 2 * OMEGA_EARTH * Math.cos(phi) * Math.sin(alpha)
 
   const nullpunktsVinkel = finnNullpunktsVinkel(
     rifle.munningshastighet, rifle.nullpunkt, kipphøydeM, rho, bcPhysics, lyd, g,
   )
 
-  // Build list of distances to sample
+  // Distanser å sample
   const distanser: number[] = []
   for (let d = 0; d <= maxDistanse; d += intervall) distanser.push(d)
   if (distanser[distanser.length - 1] !== maxDistanse) distanser.push(maxDistanse)
 
-  // Simulate trajectory
+  // ── Simulering ────────────────────────────────────────────────────────────
   const rader: BallistikkRad[] = []
   let x = 0, y = -kipphøydeM
   let vx = rifle.munningshastighet * Math.cos(nullpunktsVinkel)
   let vy = rifle.munningshastighet * Math.sin(nullpunktsVinkel)
+
+  // Koriolis lateral state (z = høyre er positiv)
+  let zKor = 0, vzKor = 0
+  // Eötvös vertikal state
+  let yEot = 0, vyEot = 0
+
   const dt = 0.002
   let t = 0
   let idx = 0
 
   while (idx < distanser.length && t < 15) {
-    const målDistanse = distanser[idx]
-
-    if (x >= målDistanse) {
+    if (x >= distanser[idx]) {
       const v = Math.sqrt(vx * vx + vy * vy)
-      const energi = 0.5 * masseKg * v * v // Joule
+      const energi = 0.5 * masseKg * v * v
 
-      const dropMm = y * 1000 // m → mm (negative = below sight line)
-      const moaStr = moaImmVedDistanse(målDistanse)
-      const dropMoa = moaStr > 0 ? -dropMm / moaStr : 0
+      // Vertikal posisjon inkluderer Eötvös-korreksjonen
+      const dropMm = (y + yEot) * 1000
+      const moaMm = moaMmVedDistanse(distanser[idx])
+      const dropMoa = moaMm > 0 ? -dropMm / moaMm : 0
 
-      // Wind drift using Pejsa lag rule: drift = v_wind × (TOF - range/V₀)
-      const lagTid = målDistanse / rifle.munningshastighet
-      const vindDriftM = sidevind * (t - lagTid)
-      const vindDriftMm = vindDriftM * 1000
-      const vindDriftMoa = moaStr > 0 ? vindDriftMm / moaStr : 0
+      // Vindavdrift (Pejsa)
+      const lagTid = distanser[idx] / rifle.munningshastighet
+      const vindDriftMm = sidevind * (t - lagTid) * 1000
+      const vindDriftMoa = moaMm > 0 ? vindDriftMm / moaMm : 0
+
+      // Koriolis horisontal
+      const korMm = zKor * 1000
+      const korMoa = moaMm > 0 ? korMm / moaMm : 0
+
+      // Eötvös (allerede i dropMm, men rapporter separat for info)
+      const eotMm = yEot * 1000
 
       rader.push({
-        distanse: Math.round(målDistanse),
+        distanse: Math.round(distanser[idx]),
         hastighet: Math.round(v),
         energi: Math.round(energi),
         drop: Math.round(dropMm),
@@ -184,13 +194,26 @@ export function beregnBallistikk(
         tid: Math.round(t * 1000) / 1000,
         vindDrift: Math.round(vindDriftMm),
         vindDriftMoa: Math.round(vindDriftMoa * 10) / 10,
+        koriolisAvdrift: Math.round(korMm),
+        koriolisAvdriftMoa: Math.round(korMoa * 10) / 10,
+        eotvosKorreksjon: Math.round(eotMm),
       })
       idx++
       if (idx >= distanser.length) break
     }
 
+    // 2D bane-steg (x, y)
     const res = rk4Steg(x, y, vx, vy, dt, rho, bcPhysics, lyd, g)
     x = res.x; y = res.y; vx = res.vx; vy = res.vy
+
+    // Koriolis horisontal: a_z = korHz · vx
+    vzKor += korHz * vx * dt
+    zKor += vzKor * dt
+
+    // Eötvös vertikal: a_y_cor = korVert · vx
+    vyEot += korVert * vx * dt
+    yEot += vyEot * dt
+
     t += dt
   }
 
@@ -203,37 +226,19 @@ export function beregnBallistikk(
 }
 
 function finnPBR(
-  munningshastighet: number,
-  nullpunktM: number,
-  kipphøydeM: number,
-  rho: number,
-  bcPhysics: number,
-  lyd: number,
-  g: number,
-  nullpunktsVinkel: number,
-  vitalSoneHalvMm: number,
+  mv: number, _nullpunktM: number, kipphøydeM: number,
+  rho: number, bcPhysics: number, lyd: number, g: number,
+  nullpunktsVinkel: number, vitalMm: number,
 ): number {
   let x = 0, y = -kipphøydeM
-  let vx = munningshastighet * Math.cos(nullpunktsVinkel)
-  let vy = munningshastighet * Math.sin(nullpunktsVinkel)
-  const dt = 0.002
-  let t = 0
-  let maxPBR = 0
-
-  // Suppress unused warning
-  void nullpunktM
-
+  let vx = mv * Math.cos(nullpunktsVinkel), vy = mv * Math.sin(nullpunktsVinkel)
+  const dt = 0.002; let t = 0; let maxPBR = 0
   while (x < 1200 && t < 15) {
     const dropMm = y * 1000
-    if (Math.abs(dropMm) <= vitalSoneHalvMm) {
-      maxPBR = x
-    } else if (x > 50 && dropMm < -vitalSoneHalvMm) {
-      break // Past PBR, bullet dropped below vital zone and won't recover
-    }
-    const res = rk4Steg(x, y, vx, vy, dt, rho, bcPhysics, lyd, g)
-    x = res.x; y = res.y; vx = res.vx; vy = res.vy
-    t += dt
+    if (Math.abs(dropMm) <= vitalMm) maxPBR = x
+    else if (x > 50 && dropMm < -vitalMm) break
+    const r = rk4Steg(x, y, vx, vy, dt, rho, bcPhysics, lyd, g)
+    x = r.x; y = r.y; vx = r.vx; vy = r.vy; t += dt
   }
-
   return Math.round(maxPBR)
 }

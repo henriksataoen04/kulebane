@@ -34,6 +34,8 @@ export const useKulebaneStore = create<KulebaneStore>()(
         høyde: 0,
         vindhastighet: 0,
         vindretning: 90,
+        breddegrad: 63,    // Midt-Norge som standard
+        skyteretning: 0,   // Nord
       },
       aktivRifleId: null,
       aktivAmmoId: null,

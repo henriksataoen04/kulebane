@@ -7,6 +7,7 @@ type Props = {
   nullpunkt: number
   kipphøyde: number
   visVind: boolean
+  visKoriolis: boolean
 }
 
 function dropFarge(drop: number) {
@@ -21,7 +22,7 @@ function energiFarge(energi: number) {
   return "text-muted-foreground"
 }
 
-export function BallistikkTabell({ rader, nullpunkt, kipphøyde, visVind }: Props) {
+export function BallistikkTabell({ rader, nullpunkt, kipphøyde, visVind, visKoriolis }: Props) {
   return (
     <div className="rounded-xl border border-border overflow-hidden">
       <div className="overflow-x-auto">
@@ -39,6 +40,9 @@ export function BallistikkTabell({ rader, nullpunkt, kipphøyde, visVind }: Prop
                   <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Vind mm</th>
                   <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">V.MOA</th>
                 </>
+              )}
+              {visKoriolis && (
+                <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Kor. →</th>
               )}
             </tr>
           </thead>
@@ -87,6 +91,11 @@ export function BallistikkTabell({ rader, nullpunkt, kipphøyde, visVind }: Prop
                         {rad.vindDriftMoa > 0 ? "+" : ""}{rad.vindDriftMoa}
                       </td>
                     </>
+                  )}
+                  {visKoriolis && (
+                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                      {rad.koriolisAvdrift > 0 ? `+${rad.koriolisAvdrift}` : `${rad.koriolisAvdrift}`}
+                    </td>
                   )}
                 </tr>
               )
