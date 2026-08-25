@@ -122,8 +122,10 @@ export function beregnBallistikk(
   const kipphøydeM = rifle.kipphøyde / 1000
 
   // ── Vind (Pejsa lag rule) ─────────────────────────────────────────────────
+  // vindretning: 0=motvind, 90=fra høyre, 180=medvind, 270=fra venstre (sett fra skytter)
+  // Vind FRA høyre har vindsvektor som peker mot venstre → sidevind negativ (kula drifter venstre)
   const vindRad = (betingelser.vindretning * Math.PI) / 180
-  const sidevind = betingelser.vindhastighet * Math.sin(vindRad) // m/s, positiv = høyre
+  const sidevind = -betingelser.vindhastighet * Math.sin(vindRad) // m/s, positiv=drift høyre, negativ=drift venstre
 
   // ── Coriolis-koeffisienter ────────────────────────────────────────────────
   // φ = geografisk breddegrad, α = skyteretning (azimut fra nord)

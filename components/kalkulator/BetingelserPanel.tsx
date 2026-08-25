@@ -83,7 +83,9 @@ export function BetingelserPanel() {
         {/* Vindretning */}
         {betingelser.vindhastighet > 0 && (
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Vindretning (sett fra skytter)</Label>
+            <Label className="text-xs text-muted-foreground">
+              Vindretning — <span className="text-muted-foreground/60 font-normal">velg der vinden kommer fra</span>
+            </Label>
             <div className="flex gap-1.5 flex-wrap">
               {VIND_RETNINGER.map(({ grad, label, tittel }) => (
                 <button key={grad} title={tittel}

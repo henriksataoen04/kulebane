@@ -49,7 +49,7 @@ export function DopeCard({ resultat }: Props) {
           </div>
           <div className="text-right text-[10px] text-muted-foreground/60">
             <p>{dato}</p>
-            <p>kulebane.app</p>
+            <p>kulebane.vercel.app</p>
           </div>
         </div>
 
@@ -82,7 +82,7 @@ export function DopeCard({ resultat }: Props) {
             <tr className="border-b border-border/60 text-muted-foreground">
               <th className="text-left py-1 font-medium">Dist</th>
               <th className="text-right py-1 font-medium">Drop</th>
-              <th className="text-right py-1 font-medium">MOA ↑</th>
+              <th className="text-right py-1 font-medium">MOA korr</th>
               <th className="text-right py-1 font-medium">Joule</th>
               <th className="text-right py-1 font-medium">m/s</th>
               {hasVind && <th className="text-right py-1 font-medium">Vind</th>}
@@ -123,7 +123,8 @@ export function DopeCard({ resultat }: Props) {
 
         {/* Footer hint */}
         <p className="text-[9px] text-muted-foreground/40 text-center pt-1">
-          MOA ↑ = antall klikk opp (1 MOA ≈ {Math.round(rifle.nullpunkt * 2.909 / 10) / 10}cm ved {rifle.nullpunkt}m)
+          MOA korr: +(opp) / −(ned) · 1 MOA ≈ {Math.round(rifle.nullpunkt * 2.909 / 10) / 10}cm ved {rifle.nullpunkt}m
+          {hasVind && " · Vind: +(høyre) / −(venstre)"}
         </p>
       </div>
 

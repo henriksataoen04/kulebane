@@ -33,7 +33,7 @@ export function BallistikkTabell({ rader, nullpunkt, kipphøyde, visVind, visKor
               <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">m/s</th>
               <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Joule</th>
               <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Drop mm</th>
-              <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">MOA ↑</th>
+              <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">MOA korr</th>
               <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Tid s</th>
               {visVind && (
                 <>
@@ -110,8 +110,13 @@ export function BallistikkTabell({ rader, nullpunkt, kipphøyde, visVind, visKor
           <span className="text-foreground/50">Drop mm</span> = under(−)/over(+) siktepunktet
         </p>
         <p className="text-[10px] text-muted-foreground/60">
-          <span className="text-foreground/50">MOA ↑</span> = klikk opp på kikkerten
+          <span className="text-foreground/50">MOA korr</span> = klikk opp(+) / ned(−) på kikkerten
         </p>
+        {visVind && (
+          <p className="text-[10px] text-muted-foreground/60">
+            <span className="text-foreground/50">Vind mm</span> = drift høyre(+) / venstre(−)
+          </p>
+        )}
         {rader.some(r => r.energi < 800) && (
           <p className="text-[10px] text-orange-400/80">
             ⚠ Under 800J — for lite energi for storvilt
